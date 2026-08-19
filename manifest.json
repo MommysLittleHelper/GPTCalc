@@ -1,0 +1,21 @@
+{
+  "name": "Логистический калькулятор объема",
+  "short_name": "Калькулятор",
+  "description": "Моментальный расчет кубатуры и мест из любого текста.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "lang": "ru",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

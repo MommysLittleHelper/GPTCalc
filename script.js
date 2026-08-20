@@ -12,25 +12,34 @@ function nPattern(){return '(?:\\d+(?:[.,]\\d+)?|[.,]\\d+)'}
 function norm(s){return String(s||'').replace(/\\\*/g,'×').replace(/\*/g,'×').replace(/[×✕✖хХ]/g,'×').replace(/\u00a0/g,' ').replace(/[–—]/g,'-').replace(/\s+/g,' ')}
 function unitFromText(t,end){const s=t.slice(end,end+45).toLowerCase();const m=s.match(/^\s*(мм|mm|миллиметр(?:а|ов)?|см|cm|сантиметр(?:а|ов)?|м|m|метр(?:а|ов)?)/i);if(!m)return null;const u=m[1];if(/^мм|^mm|миллиметр/.test(u))return 'мм';if(/^см|^cm|сантиметр/.test(u))return 'см';return 'м'}
 function quantityFromContext(t,start,end){
- const before=t.slice(Math.max(0,start-120),start), after=t.slice(end,Math.min(t.length,end+150));
- let m=after.match(/^\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)?\s*[×x*]\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)?/i);
+ const before=t.slice(Math.max(0,start-160),start), after=t.slice(end,Math.min(t.length,end+180));
+ // Важно: длинные названия единиц идут раньше коротких, иначе "метров"
+ // ошибочно матчится как отдельная буква "м".
+ const unitWords='(?:миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?|мм|см|mm|cm|м|m)';
+ const qty='(\\d+(?:[.,]\\d+)?)';
+ const qtyWords='(?:шт\\.?|штук|мест(?:а|о)?|pcs?)';
+ let m;
+ 
+ // 1. Явное количество после габаритов: × 4, ×4 шт.
+ m=after.match(new RegExp('^\\s*[×x*]\\s*'+qty+'\\s*'+qtyWords+'?','i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- m=after.match(/^\s*(?:,|;|-|—)?\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)?\s*(?:,|;|-|—)?\s*(?:кол-?во|количество|qty)\s*[:=-]?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)?/i);
+ 
+ // 2. Единица + количество: "4.5 метров, 8шт", "600 мм — 4 шт."
+ m=after.match(new RegExp('^\\s*'+unitWords+'\\s*(?:[,;:—-]\\s*)?(?:кол-?во|количество|qty)?\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- m=after.match(/^\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)?\s*(?:,|;|-|—)?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\b/i);
+ 
+ // 3. То же самое, но без обязательной единицы (например: "..., 4 шт.").
+ m=after.match(new RegExp('^\\s*(?:[,;:—-]\\s*)?(?:кол-?во|количество|qty)\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- // Quantity may follow a unit word with punctuation, e.g. "4.5 метров, 8шт".
- m=after.match(/^\s*(?:,|;|-|—)?\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)\s*(?:,|;|:|-|—)?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\b/i);
+ m=after.match(new RegExp('^\\s*(?:[,;:—-]\\s*)?'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- m=before.match(/(?:^|[\s,;])(?:кол-?во|количество|qty)\s*[:=-]?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)?\s*$/i);
+ 
+ // 4. Количество перед габаритами: "2 шт. 600x400x300".
+ m=before.match(new RegExp('(?:^|[\\s,;])(?:кол-?во|количество|qty)\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords+'?\\s*$','i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- m=before.match(/(?:^|[\s,;])(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\s*$/i);
+ m=before.match(new RegExp('(?:^|[\\s,;])'+qty+'\\s*'+qtyWords+'\\s*$','i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- // Quantity after a unit and comma: "4.5 метров, 8шт".
- m=after.match(/^\s*(?:,|;|:|-|—)\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\b/i);
- if(m)return Math.max(1,Math.round(num(m[1])));
- m=after.match(/^\s*(?:,|;|:|-|—)\s*(?:кол-?во|количество|qty)\s*[:=-]?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)?/i);
- if(m)return Math.max(1,Math.round(num(m[1])));
+ 
  return 1;
 }
 function candidateScore(nums,q,u){

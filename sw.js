@@ -1,4 +1,4 @@
-const CACHE = 'calc-volume-v1.1.1';
+const CACHE = 'calc-volume-v1.1.2';
 const ASSETS = ['./','./index.html','./script.js','./style.css','./manifest.json'];
 
 self.addEventListener('install', event => {

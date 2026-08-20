@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Логистический калькулятор</title>
+<link rel="stylesheet" href="style.css">
+<script src="script.js" defer></script>
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+<div class="container">
+  <div class="theme-switch">
+    <button id="theme-light">☀️ Светлая</button>
+    <button id="theme-dark">🌙 Тёмная</button>
+    <button id="theme-system">💻 Системная</button>
+  </div>
+  <h1>📦 Логистический калькулятор</h1>
+  <p class="subtitle">Умный автовыбор и интерактивное управление</p>
+  <textarea id="inputText" placeholder="Вставьте строки сюда...&#10;Пример: 6*5*4&#10;Или: 1500 x 500 x 1000"></textarea>
+  <button class="calc-btn" id="calcBtn">Рассчитать объем</button>
+  <div id="resultBox" class="result" style="display:none;">
+    <div id="calcStatus" class="calc-status neutral"></div>
+    <div class="totals-box">
+      <p><span>🚚 Общий объем:</span> <span id="totalVolume"><strong>0.0000</strong> м³</span></p>
+      <p><span>🔢 Всего мест:</span> <span id="totalPieces" style="font-weight:600;">0 шт.</span></p>
+    </div>
+    <button class="copy-btn" id="copyBtn">📋 Скопировать отчет</button>
+    <button class="copy-btn" id="clearBtn" style="border-color:#ef4444;color:#ef4444;margin-top:-5px;">🗑️ Очистить всё</button>
+    <div class="details-title">🔍 Построчный разбор текста:</div>
+    <div id="detailsList"></div>
+  </div>
+  <div class="developer-credit">Флагманская версия • автоматическое определение габаритов груза</div>
+</div>
+</body>
+</html>

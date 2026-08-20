@@ -25,7 +25,7 @@ function quantityFromContext(t,start,end){
  if(m)return Math.max(1,Math.round(num(m[1])));
  
  // 2. Единица + количество: "4.5 метров, 8шт", "600 мм — 4 шт."
- m=after.match(new RegExp('^\\s*'+unitWords+'\\s*(?:[,;:—-]\\s*)?(?:кол-?во|количество|qty)?\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
+ m=after.match(new RegExp('^\\s*'+unitWords+'\\s*(?:(?:[,;:—-]|[×x*])\\s*)?(?:кол-?во|количество|qty)?\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
  
  // 3. То же самое, но без обязательной единицы (например: "..., 4 шт.").
@@ -79,8 +79,16 @@ function render(){const a=state.items;if(!a.length){els.result.style.display='no
 function calculate(){state.items=parse(els.input.value);render();updateAdapterPreview()}
 function setUnit(i,u){const x=state.items[i];if(!x)return;x.unit=u;x.single=x.dims.reduce((p,v)=>p*v*UNIT_TO_M[u],1);x.total=x.single*x.quantity;x.explicitUnit=true;x.confidence='high';x.warning='';render();updateAdapterPreview()}
 function adaptedRows(){return parse(els.input.value)}
-function updateAdapterPreview(rows=adaptedRows()){if(!els.adapter)return;if(!rows.length){els.adapter.style.display='none';els.adapter.innerHTML='';return}els.adapter.style.display='block';els.adapter.innerHTML=`<div class="adapter-title">🧠 Адаптированные данные</div>`+rows.map((r,i)=>`<div class="adapter-row"><span><b>Позиция ${i+1}</b> — ${r.dims.join(' × ')} ${r.unit}</span><strong>${r.quantity} шт.</strong></div>`).join('')}
-function adaptText(){const rows=adaptedRows();if(!rows.length){updateAdapterPreview(rows);return}els.input.value=rows.map(r=>`${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.`).join('\n');calculate()}
+function updateAdapterPreview(rows=adaptedRows()){if(!els.adapter)return;if(!rows.length){els.adapter.style.display='none';els.adapter.innerHTML='';return}els.adapter.style.display='block';els.adapter.innerHTML=`<div class="adapter-title">🧠 Адаптированные данные</div><div class="adapter-hint">Формат, который получает расчётное ядро: L × W × H + единица + количество.</div>`+rows.map((r,i)=>`<div class="adapter-row"><span><b>Позиция ${i+1}</b> — ${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.</span></div>`).join('')}
+function adaptText(){
+ const rows=adaptedRows();
+ if(!rows.length){updateAdapterPreview(rows);return}
+ // Adapter is a canonicalization layer: the output is deliberately strict,
+ // so the calculation engine receives only L × W × H + unit + quantity.
+ const canonical=rows.map(r=>`${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.`).join('\n');
+ els.input.value=canonical;
+ calculate();
+}
 els.calc.addEventListener('click',calculate);els.input.addEventListener('input',()=>{clearTimeout(window.__calcTimer);window.__calcTimer=setTimeout(calculate,250)});els.input.addEventListener('paste',()=>setTimeout(calculate,30));if(els.adapt)els.adapt.addEventListener('click',adaptText);els.details.addEventListener('click',e=>{const b=e.target.closest('.btn-badge');if(b)setUnit(+b.dataset.i,b.dataset.u)});els.clear.addEventListener('click',()=>{els.input.value='';state.items=[];els.adapter.style.display='none';render();els.input.focus()});els.copy.addEventListener('click',async()=>{let r='📊 ОТЧЕТ ПО РАСЧЕТУ ОБЪЕМА:\n\n';state.items.forEach((x,i)=>{r+=`• Позиция ${i+1}: ${x.dims.join('x')} ${x.unit} × ${x.quantity} шт. = ${fmt(x.total)} м³\n`;if(x.warning)r+=`  ⚠️ ${x.warning}\n`});r+=`\n🚚 ОБЩИЙ ОБЪЕМ: ${fmt(state.items.reduce((s,x)=>s+x.total,0))} м³\n🔢 ВСЕГО МЕСТ: ${state.items.reduce((s,x)=>s+x.quantity,0)} шт.`;try{await navigator.clipboard.writeText(r)}catch(_){}});
 function theme(t){document.documentElement.classList.remove('light','dark');let actual=t;if(t==='system')actual=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.classList.add(actual);localStorage.setItem('theme',t);document.querySelectorAll('.theme-switch button').forEach(b=>b.classList.remove('active'));const bt=$('theme-'+t);if(bt)bt.classList.add('active')}
 $('theme-light').onclick=()=>theme('light');$('theme-dark').onclick=()=>theme('dark');$('theme-system').onclick=()=>theme('system');theme(localStorage.getItem('theme')||'system');

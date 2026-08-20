@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#24318a">
+    <title>Логистический калькулятор</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js?v=1.0.6" defer></script>
+</head>
+<body>
+    <main class="page-shell">
+        <section class="container" aria-label="Логистический калькулятор">
+            <div class="theme-switch" aria-label="Тема оформления">
+                <button type="button" id="theme-light">☀️ Светлая</button>
+                <button type="button" id="theme-dark">🌙 Тёмная</button>
+                <button type="button" id="theme-system">💻 Системная</button>
+            </div>
+
+            <h1>📦 Логистический калькулятор</h1>
+            <p class="subtitle">Умный автовыбор и интерактивное управление</p>
+
+            <textarea id="inputText" spellcheck="false" placeholder="Вставьте строки сюда...&#10;Пример: 6*5*4&#10;Или: 1500 x 500 x 1000"></textarea>
+            <button class="calc-btn" id="calcBtn" type="button">Рассчитать объем</button>
+
+            <div class="connection-status" id="connectionStatus" role="status" aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
+                <div>
+                    <strong id="connectionTitle">Проверяем состояние приложения…</strong>
+                    <small id="connectionText">Подготовка онлайн/офлайн режима</small>
+                </div>
+            </div>
+
+            <div id="resultBox" class="result" hidden>
+                <div id="calcStatus" class="calc-status" role="status" aria-live="polite"></div>
+
+                <div class="totals-box">
+                    <p><span>🚚 Общий объем:</span><span id="totalVolume"><strong>0.0000</strong> м³</span></p>
+                    <p><span>🔢 Всего мест:</span><span id="totalPieces">0 шт.</span></p>
+                </div>
+
+                <button class="copy-btn primary-copy" id="copyBtn" type="button">📋 Скопировать отчет</button>
+                <button class="copy-btn clear-btn" id="clearBtn" type="button">🗑️ Очистить всё</button>
+
+                <div class="details-title">🔍 Построчный разбор текста:</div>
+                <div id="detailsList"></div>
+            </div>
+
+            <div class="developer-credit">Флагманская версия · для личного использования</div>
+        </section>
+    </main>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('./sw.js').catch(function (error) {
+                    console.warn('Офлайн-режим не активирован:', error);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

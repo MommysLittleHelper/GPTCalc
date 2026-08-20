@@ -19,6 +19,9 @@ function quantityFromContext(t,start,end){
  if(m)return Math.max(1,Math.round(num(m[1])));
  m=after.match(/^\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)?\s*(?:,|;|-|—)?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\b/i);
  if(m)return Math.max(1,Math.round(num(m[1])));
+ // Quantity may follow a unit word with punctuation, e.g. "4.5 метров, 8шт".
+ m=after.match(/^\s*(?:,|;|-|—)?\s*(?:мм|см|м|mm|cm|m|миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?)\s*(?:,|;|:|-|—)?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\b/i);
+ if(m)return Math.max(1,Math.round(num(m[1])));
  m=before.match(/(?:^|[\s,;])(?:кол-?во|количество|qty)\s*[:=-]?\s*(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)?\s*$/i);
  if(m)return Math.max(1,Math.round(num(m[1])));
  m=before.match(/(?:^|[\s,;])(\d+(?:[.,]\d+)?)\s*(?:шт\.?|штук|мест(?:а|о)?|pcs?)\s*$/i);

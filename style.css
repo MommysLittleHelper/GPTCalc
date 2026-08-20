@@ -24,3 +24,5 @@ button.copy-btn{width:100%;background:none;border:1px solid var(--primary);color
 
 .adapter-hint{font-size:.82rem;opacity:.72;margin:-4px 0 10px;line-height:1.35}
 .adapter-row{font-family:inherit}
+
+.adapter-warning{margin-top:6px;font-size:12px;opacity:.9}

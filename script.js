@@ -12,34 +12,31 @@ function nPattern(){return '(?:\\d+(?:[.,]\\d+)?|[.,]\\d+)'}
 function norm(s){return String(s||'').replace(/\\\*/g,'×').replace(/\*/g,'×').replace(/[×✕✖хХ]/g,'×').replace(/\u00a0/g,' ').replace(/[–—]/g,'-').replace(/\s+/g,' ')}
 function unitFromText(t,end){const s=t.slice(end,end+45).toLowerCase();const m=s.match(/^\s*(мм|mm|миллиметр(?:а|ов)?|см|cm|сантиметр(?:а|ов)?|м|m|метр(?:а|ов)?)/i);if(!m)return null;const u=m[1];if(/^мм|^mm|миллиметр/.test(u))return 'мм';if(/^см|^cm|сантиметр/.test(u))return 'см';return 'м'}
 function quantityFromContext(t,start,end){
- const before=t.slice(Math.max(0,start-160),start), after=t.slice(end,Math.min(t.length,end+180));
- // Важно: длинные названия единиц идут раньше коротких, иначе "метров"
- // ошибочно матчится как отдельная буква "м".
+ const before=t.slice(Math.max(0,start-180),start), after=t.slice(end,Math.min(t.length,end+220));
  const unitWords='(?:миллиметр(?:а|ов)?|сантиметр(?:а|ов)?|метр(?:а|ов)?|мм|см|mm|cm|м|m)';
  const qty='(\\d+(?:[.,]\\d+)?)';
  const qtyWords='(?:шт\\.?|штук|мест(?:а|о)?|pcs?)';
  let m;
- 
- // 1. Явное количество после габаритов: × 4, ×4 шт.
+ // 1. Явное количество сразу после габаритов: × 4, ×4 шт.
  m=after.match(new RegExp('^\\s*[×x*]\\s*'+qty+'\\s*'+qtyWords+'?','i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- 
  // 2. Единица + количество: "4.5 метров, 8шт", "600 мм — 4 шт."
  m=after.match(new RegExp('^\\s*'+unitWords+'\\s*(?:(?:[,;:—-]|[×x*])\\s*)?(?:кол-?во|количество|qty)?\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- 
- // 3. То же самое, но без обязательной единицы (например: "..., 4 шт.").
+ // 3. Явное количество после размеров, в том числе после переноса строки.
  m=after.match(new RegExp('^\\s*(?:[,;:—-]\\s*)?(?:кол-?во|количество|qty)\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
  m=after.match(new RegExp('^\\s*(?:[,;:—-]\\s*)?'+qty+'\\s*'+qtyWords,'i'));
  if(m)return Math.max(1,Math.round(num(m[1])));
- 
- // 4. Количество перед габаритами: "2 шт. 600x400x300".
- m=before.match(new RegExp('(?:^|[\\s,;])(?:кол-?во|количество|qty)\\s*[:=-]?\\s*'+qty+'\\s*'+qtyWords+'?\\s*$','i'));
- if(m)return Math.max(1,Math.round(num(m[1])));
- m=before.match(new RegExp('(?:^|[\\s,;])'+qty+'\\s*'+qtyWords+'\\s*$','i'));
- if(m)return Math.max(1,Math.round(num(m[1])));
- 
+ // 4. Количество перед габаритами. Ищем последнее явное количество в контексте,
+ // допускаем текст между ним и размерами: "2 шт. — ящик 600x400x300".
+ const beforeMatches=[...before.matchAll(new RegExp('(?:^|[^\\d])'+qty+'\\s*'+qtyWords+'(?=\\s*(?:[-—:;,]|$|[\\p{L}]))','giu'))];
+ if(beforeMatches.length){
+   const last=beforeMatches[beforeMatches.length-1];
+   const prefix=before.slice(0,last.index);
+   // Не связываем номера накладных/артикулов с габаритами.
+   if(!/(?:накладн|сч[её]т|артикул|арт\\.|№)\\s*$/i.test(prefix))return Math.max(1,Math.round(num(last[0].match(new RegExp(qty))[1])));
+ }
  return 1;
 }
 function candidateScore(nums,q,u){
@@ -69,25 +66,29 @@ function findTriplets(line){
  }
  return out;
 }
-function parseLine(line){
- const out=[];for(const f of findTriplets(line)){const unit=unitFromText(norm(line),f.end);const q=quantityFromContext(norm(line),f.index,f.end);const choice=chooseUnit(f.nums,q,unit);out.push({raw:line,dims:f.nums,unit:choice.unit,quantity:q,single:choice.single,total:choice.single*q,confidence:choice.confidence,warning:choice.warning,explicitUnit:!!unit,explicitQuantity:q!==1});}return out;
+function parseLine(line,nextLine=''){
+ const current=String(line||''), context=nextLine?current+'\n'+nextLine:current, t=norm(context);
+ const out=[];for(const f of findTriplets(norm(current))){const unit=unitFromText(t,f.end);const q=quantityFromContext(t,f.index,f.end);const choice=chooseUnit(f.nums,q,unit);out.push({raw:current,dims:f.nums,unit:choice.unit,quantity:q,single:choice.single,total:choice.single*q,confidence:choice.confidence,warning:choice.warning,explicitUnit:!!unit,explicitQuantity:q!==1});}return out;
 }
-function parse(text){const out=[];for(const line of String(text||'').split(/\r?\n/)){out.push(...parseLine(line))}return out}
+function parse(text){const lines=String(text||'').split(/\r?\n/);const out=[];for(let i=0;i<lines.length;i++){out.push(...parseLine(lines[i],lines[i+1]||''));}return out}
 function fmt(x){return x.toFixed(4)}
 function statusText(a){const low=a.filter(x=>x.confidence==='low').length,auto=a.filter(x=>!x.explicitUnit).length;if(low)return [`warning`,`⚠️ Требует проверки: ${low} ${low===1?'позиция':'позиции'} с неоднозначной единицей`];if(auto)return [`neutral`,`ℹ️ ${auto} ${auto===1?'единица выбрана':'единицы выбраны'} автоматически`];return ['success','✓ Расчёт подтверждён']}
 function render(){const a=state.items;if(!a.length){els.result.style.display='none';return}const total=a.reduce((s,x)=>s+x.total,0),pieces=a.reduce((s,x)=>s+x.quantity,0);els.result.style.display='block';els.totalVolume.innerHTML=`<strong>${fmt(total)}</strong> м³`;els.totalPieces.textContent=`${pieces} шт.`;const st=statusText(a);els.status.className='calc-status '+st[0];els.status.textContent=st[1];els.details.innerHTML='';a.forEach((x,i)=>{const d=document.createElement('div');d.className='detail-line '+(x.confidence==='low'?'warning-line':'');d.innerHTML=`<div><strong>Позиция ${i+1}:</strong> ${x.dims.join('×')} ${x.unit} × ${x.quantity} шт. = <strong>${fmt(x.total)} м³</strong></div><div class="badge-group"><button class="btn-badge ${x.unit==='м'?'active':''}" data-i="${i}" data-u="м">м</button><button class="btn-badge ${x.unit==='см'?'active':''}" data-i="${i}" data-u="см">см</button><button class="btn-badge ${x.unit==='мм'?'active':''}" data-i="${i}" data-u="мм">мм</button></div>${x.warning?`<div class="warning-text">⚠️ ${x.warning}</div>`:''}`;els.details.appendChild(d)})}
 function calculate(){state.items=parse(els.input.value);render();updateAdapterPreview()}
 function setUnit(i,u){const x=state.items[i];if(!x)return;x.unit=u;x.single=x.dims.reduce((p,v)=>p*v*UNIT_TO_M[u],1);x.total=x.single*x.quantity;x.explicitUnit=true;x.confidence='high';x.warning='';render();updateAdapterPreview()}
 function adaptedRows(){return parse(els.input.value)}
-function updateAdapterPreview(rows=adaptedRows()){if(!els.adapter)return;if(!rows.length){els.adapter.style.display='none';els.adapter.innerHTML='';return}els.adapter.style.display='block';els.adapter.innerHTML=`<div class="adapter-title">🧠 Адаптированные данные</div><div class="adapter-hint">Формат, который получает расчётное ядро: L × W × H + единица + количество.</div>`+rows.map((r,i)=>`<div class="adapter-row"><span><b>Позиция ${i+1}</b> — ${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.</span></div>`).join('')}
+function updateAdapterPreview(rows=adaptedRows()){if(!els.adapter)return;if(!rows.length){els.adapter.style.display='none';els.adapter.innerHTML='';return}els.adapter.style.display='block';els.adapter.innerHTML=`<div class="adapter-title">🧠 Адаптированные данные</div><div class="adapter-hint">Формат, который получает расчётное ядро: L × W × H + единица + количество.</div>`+rows.map((r,i)=>`<div class="adapter-row"><span><b>Позиция ${i+1}</b> — ${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.</span>${r.warning?`<div class="adapter-warning">⚠️ ${r.warning}</div>`:''}</div>`).join('')}
 function adaptText(){
  const rows=adaptedRows();
  if(!rows.length){updateAdapterPreview(rows);return}
- // Adapter is a canonicalization layer: the output is deliberately strict,
- // so the calculation engine receives only L × W × H + unit + quantity.
  const canonical=rows.map(r=>`${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.`).join('\n');
  els.input.value=canonical;
- calculate();
+ // Канонический текст используется как формат ввода, но сохраняем
+ // уверенность исходного распознавания: автоопределённая единица не
+ // превращается в явно указанную только из-за адаптации.
+ state.items=rows.map(r=>({...r}));
+ render();
+ updateAdapterPreview(rows);
 }
 els.calc.addEventListener('click',calculate);els.input.addEventListener('input',()=>{clearTimeout(window.__calcTimer);window.__calcTimer=setTimeout(calculate,250)});els.input.addEventListener('paste',()=>setTimeout(calculate,30));if(els.adapt)els.adapt.addEventListener('click',adaptText);els.details.addEventListener('click',e=>{const b=e.target.closest('.btn-badge');if(b)setUnit(+b.dataset.i,b.dataset.u)});els.clear.addEventListener('click',()=>{els.input.value='';state.items=[];els.adapter.style.display='none';render();els.input.focus()});els.copy.addEventListener('click',async()=>{let r='📊 ОТЧЕТ ПО РАСЧЕТУ ОБЪЕМА:\n\n';state.items.forEach((x,i)=>{r+=`• Позиция ${i+1}: ${x.dims.join('x')} ${x.unit} × ${x.quantity} шт. = ${fmt(x.total)} м³\n`;if(x.warning)r+=`  ⚠️ ${x.warning}\n`});r+=`\n🚚 ОБЩИЙ ОБЪЕМ: ${fmt(state.items.reduce((s,x)=>s+x.total,0))} м³\n🔢 ВСЕГО МЕСТ: ${state.items.reduce((s,x)=>s+x.quantity,0)} шт.`;try{await navigator.clipboard.writeText(r)}catch(_){}});
 function theme(t){document.documentElement.classList.remove('light','dark');let actual=t;if(t==='system')actual=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.classList.add(actual);localStorage.setItem('theme',t);document.querySelectorAll('.theme-switch button').forEach(b=>b.classList.remove('active'));const bt=$('theme-'+t);if(bt)bt.classList.add('active')}

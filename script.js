@@ -57,7 +57,16 @@ function findTriplets(line){
  const t=norm(line), n=nPattern(), out=[];
  const explicitRe=new RegExp(`(${n})\\s*(?:×|x|-)\\s*(${n})\\s*(?:×|x|-)\\s*(${n})(?!\\s*(?:×|x))`,'ig');
  let m;
- while((m=explicitRe.exec(t))){out.push({index:m.index,end:explicitRe.lastIndex,nums:[num(m[1]),num(m[2]),num(m[3])],explicit:true});}
+ while((m=explicitRe.exec(t))){
+  const before=t.slice(Math.max(0,m.index-60),m.index).toLowerCase();
+  const after=t.slice(explicitRe.lastIndex,Math.min(t.length,explicitRe.lastIndex+60)).toLowerCase();
+  // Do not treat an article/SKU code such as "артикул 600-400-300" as cargo dimensions.
+  // Ordinary hyphenated dimensions like "1200-800-400" remain valid.
+  const articleCode=/(?:артикул|арт\.?|sku)\s*[:№#-]?\s*$/.test(before);
+  const hasCargoCue=/(?:мм|см|\bм\b|millimeter|сантиметр|метр|шт\.?|штук|мест(?:а|о)?|кол-?во|количество|qty|\bгруз\b|\bящик\b|\bкороб\b|\bпаллет\b|\bпаллета\b)/i.test(after);
+  if(articleCode && !hasCargoCue) continue;
+  out.push({index:m.index,end:explicitRe.lastIndex,nums:[num(m[1]),num(m[2]),num(m[3])],explicit:true});
+}
  // Space-separated triplets: only when the local line looks like a cargo/position line,
  // and never when the candidate is part of a date, invoice number or article code.
  if(!out.length){

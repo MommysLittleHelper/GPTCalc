@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Логистический калькулятор объема",
   "short_name": "Калькулятор",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Умный автоанализ габаритов и расчет кубических метров",
   "start_url": "./index.html",
   "display": "standalone",

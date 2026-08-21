@@ -85,7 +85,57 @@ function statusText(a){const low=a.filter(x=>x.confidence==='low').length,auto=a
 function render(){const a=state.items;if(!a.length){els.result.style.display='none';return}const total=a.reduce((s,x)=>s+x.total,0),pieces=a.reduce((s,x)=>s+x.quantity,0);els.result.style.display='block';els.totalVolume.innerHTML=`<strong>${fmt(total)}</strong> м³`;els.totalPieces.textContent=`${pieces} шт.`;const st=statusText(a);els.status.className='calc-status '+st[0];els.status.textContent=st[1];els.details.innerHTML='';a.forEach((x,i)=>{const d=document.createElement('div');d.className='detail-line '+(x.confidence==='low'?'warning-line':'');d.innerHTML=`<div><strong>Позиция ${i+1}:</strong> ${x.dims.join('×')} ${x.unit} × ${x.quantity} шт. = <strong>${fmt(x.total)} м³</strong></div><div class="badge-group"><button class="btn-badge ${x.unit==='м'?'active':''}" data-i="${i}" data-u="м">м</button><button class="btn-badge ${x.unit==='см'?'active':''}" data-i="${i}" data-u="см">см</button><button class="btn-badge ${x.unit==='мм'?'active':''}" data-i="${i}" data-u="мм">мм</button></div>${x.warning?`<div class="warning-text">⚠️ ${x.warning}</div>`:''}`;els.details.appendChild(d)})}
 function calculate(){state.items=parse(els.input.value);render();updateAdapterPreview()}
 function setUnit(i,u){const x=state.items[i];if(!x)return;x.unit=u;x.single=x.dims.reduce((p,v)=>p*v*UNIT_TO_M[u],1);x.total=x.single*x.quantity;x.explicitUnit=true;x.confidence='high';x.warning='';render();updateAdapterPreview()}
-function adaptedRows(){return parse(els.input.value)}
+function adapterNorm(s){return String(s||'').replace(/\\\*/g,'×').replace(/\*/g,'×').replace(/[×✕✖хХ]/g,'×').replace(/\u00a0/g,' ').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim()}
+function adapterNumPattern(){return '(?:\\d+(?:[.,]\\d+)?|[.,]\\d+)'}
+function adapterUnitToken(){return '(?:миллиметров?|миллиметра|миллиметр|сантиметров?|сантиметра|сантиметр|метров?|метра|метр|мм|mm|см|cm|м|m)' }
+function adapterUnitValue(u){const x=String(u||'').toLowerCase();if(/^мм|^mm|миллиметр/.test(x))return 'мм';if(/^см|^cm|сантиметр/.test(x))return 'см';return 'м'}
+function adapterFindDimensionGroups(text){
+ const t=adapterNorm(text), n=adapterNumPattern(), unit=adapterUnitToken(), groups=[]; let m;
+ // 1) Unit attached to every number: 130cmx125cmx235cm / 0.86m X 0.86m X 0.96m
+ const each=new RegExp('('+n+')\\s*('+unit+')\\s*(?:×|x|-|\\*|:)\\s*('+n+')\\s*('+unit+')\\s*(?:×|x|-|\\*|:)\\s*('+n+')\\s*('+unit+')','ig');
+ while((m=each.exec(t))){groups.push({index:m.index,end:each.lastIndex,nums:[num(m[1]),num(m[3]),num(m[5])],unit:adapterUnitValue(m[2]),explicitUnit:true,source:m[0]});}
+ // 1b) Unit attached to every number with no separator: 120см80см175см.
+ const eachJoined=new RegExp('('+n+')\s*('+unit+')\s*('+n+')\s*('+unit+')\s*('+n+')\s*('+unit+')','ig');
+ while((m=eachJoined.exec(t))){if(groups.some(g=>m.index>=g.index&&m.index<g.end))continue;groups.push({index:m.index,end:eachJoined.lastIndex,nums:[num(m[1]),num(m[3]),num(m[5])],unit:adapterUnitValue(m[2]),explicitUnit:true,source:m[0]});}
+// 2) Unit after the whole group: 40 x 30.5 x 22.2 см / 120 80 60 см
+ const whole=new RegExp('('+n+')\\s*(?:×|x|-|\\*)\\s*('+n+')\\s*(?:×|x|-|\\*)\\s*('+n+')\\s*('+unit+')','ig');
+ while((m=whole.exec(t))){if(groups.some(g=>m.index>=g.index&&m.index<g.end))continue;groups.push({index:m.index,end:whole.lastIndex,nums:[num(m[1]),num(m[2]),num(m[3])],unit:adapterUnitValue(m[4]),explicitUnit:true,source:m[0]});}
+ // 3) Three numbers separated only by spaces, with a unit after the third.
+ const spaced=new RegExp('(^|[^\\d.,])('+n+')\\s+('+n+')\\s+('+n+')\\s*('+unit+')(?=$|[^\\w])','ig');
+ while((m=spaced.exec(t))){const idx=m.index+(m[1]?m[1].length:0);if(groups.some(g=>idx>=g.index&&idx<g.end))continue;groups.push({index:idx,end:spaced.lastIndex,nums:[num(m[2]),num(m[3]),num(m[4])],unit:adapterUnitValue(m[5]),explicitUnit:true,source:m[0].trim()});}
+ // 4) Three bare numbers with separators, including 1200-800-400 and 15*15*15.
+ const bare=new RegExp('('+n+')\\s*(?:×|x|-|\\*)\\s*('+n+')\\s*(?:×|x|-|\\*)\\s*('+n+')(?![\\d.,])','ig');
+ while((m=bare.exec(t))){if(groups.some(g=>m.index>=g.index&&m.index<g.end))continue;const before=t.slice(Math.max(0,m.index-70),m.index).toLowerCase();const after=t.slice(bare.lastIndex,Math.min(t.length,bare.lastIndex+80)).toLowerCase();if(/(?:накладн|сч[её]т|дата|артикул|арт\\.|sku|модель)\\s*[:№#-]?\\s*$/.test(before)&&!/(?:груз|габарит|размер|ящик|короб|паллет|мест|шт|кол-?во|количество)/i.test(after))continue;groups.push({index:m.index,end:bare.lastIndex,nums:[num(m[1]),num(m[2]),num(m[3])],unit:null,explicitUnit:false,source:m[0]});}
+ // 5) Three bare numbers separated only by spaces, but avoid dates/service numbers.
+ const bareSpaced=new RegExp('(^|[^\\d.,])('+n+')\\s+('+n+')\\s+('+n+')(?!\\s*(?:\\d|[./-]))','ig');
+ while((m=bareSpaced.exec(t))){const idx=m.index+(m[1]?m[1].length:0);if(groups.some(g=>idx>=g.index&&idx<g.end))continue;const before=t.slice(Math.max(0,idx-60),idx).toLowerCase();if(/(?:накладн|сч[её]т|дата|артикул|арт\\.|sku|модель|вес)\\s*[:№#-]?\\s*$/.test(before))continue;groups.push({index:idx,end:bareSpaced.lastIndex,nums:[num(m[2]),num(m[3]),num(m[4])],unit:null,explicitUnit:false,source:m[0].trim()});}
+ return groups.sort((a,b)=>a.index-b.index);
+}
+function adapterQuantityContext(text,g,nextIndex){
+ const before=text.slice(Math.max(0,g.index-260),g.index), after=text.slice(g.end,Math.min(text.length,nextIndex==null?text.length:g.end+320));
+ const qty='(\\d+(?:[.,]\\d+)?)'; const words='(?:шт\\.?|штук(?:и|а)?|мест(?:о|а)?|паллет(?:а|ы)?|короб(?:ок|а)?|коробк(?:а|и)|ящик(?:а|и)?|cll|pcs?)'; let m;
+ // Explicit count after dimensions: × 4, 4 шт, 2 таких места, количество: 4.
+ m=after.match(new RegExp('^\\s*(?:×|x|\\*)\\s*'+qty+'\\s*(?:'+words+')?','i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ m=after.match(new RegExp('^\\s*(?:[-–—,:;.]\\s*)?(?:кол-?во|количество|qty|мест|места|место)\\s*[:=-]?\\s*'+qty+'\\s*'+words+'?','i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ m=after.match(new RegExp('^\\s*(?:[-–—,:;.]\\s*)?'+qty+'\\s*(?:таких\\s+)?'+words,'i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ // cll can be attached to the quantity: X 1cll / 1cll.
+ m=after.match(new RegExp('^\\s*(?:×|x|\\*)?\\s*'+qty+'\\s*cll\\b','i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ // Count before dimensions: 5 паллет / 1 место / 51 коробку.
+ const bm=[...before.matchAll(new RegExp('(?:^|[^\\d])'+qty+'\\s*'+words,'giu'))];if(bm.length){const last=bm[bm.length-1];return {q:Math.max(1,Math.round(num(last[1]||last[0].match(new RegExp(qty))[1]))),explicit:true};}
+ // "Всего планируют отправить 51 коробку ... каждая"
+ m=before.match(new RegExp('(?:всего|планируют\\s+отправить|отправить|количество|кол-?во)\\D{0,80}'+qty+'\\s*(?:короб(?:ок|а)?|коробк(?:а|и)|паллет(?:а|ы)?|мест(?:о|а)?|штук?)','i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ // Same local block/line after dimensions, including "... = weight"; do not use weight.
+ const blockAfter=after.split(/\n\s*(?:позиция|item|поз\.?|\\d+[.)])\s*/i)[0];
+ m=blockAfter.match(new RegExp('(?:кол-?во|количество|мест(?:о|а)?|всего\\s+мест)\\s*[:=-]?\\s*'+qty+'\\s*'+words+'?','i'));if(m)return {q:Math.max(1,Math.round(num(m[1]))),explicit:true};
+ return {q:1,explicit:false};
+}
+function adapterSplitBlocks(text){
+ const raw=String(text||'').replace(/\r/g,'').split('\n'), blocks=[];let cur=[];
+ for(const line of raw){const s=line.trim();if(!s){if(cur.length){blocks.push(cur.join('\n'));cur=[];}continue;}if(/^(?:позиция|поз\.?|item)\s*\d+/i.test(s)&&cur.length){blocks.push(cur.join('\n'));cur=[s];}else cur.push(s);}if(cur.length)blocks.push(cur.join('\n'));return blocks.length?blocks:[String(text||'')];
+}
+function adapterParse(text){
+ const rows=[];for(const block of adapterSplitBlocks(text)){const groups=adapterFindDimensionGroups(block);for(let i=0;i<groups.length;i++){const g=groups[i], next=groups[i+1]?groups[i+1].index:null, qc=adapterQuantityContext(block,g,next);let unit=g.unit;if(!unit){const choice=chooseUnit(g.nums,qc.q,null);unit=choice.unit;}const single=g.nums.reduce((p,v)=>p*v*UNIT_TO_M[unit],1);const warning=g.explicitUnit?'':`Единица не указана. Принято: ${unit}. Проверьте исходные данные.`;rows.push({raw:block,dims:g.nums,unit,quantity:qc.q,single,total:single*qc.q,confidence:g.explicitUnit?'high':'medium',warning,explicitUnit:g.explicitUnit,explicitQuantity:qc.explicit});}}return rows;}
+function adaptedRows(){return adapterParse(els.input.value)}
 function updateAdapterPreview(rows=adaptedRows()){if(!els.adapter)return;if(!rows.length){els.adapter.style.display='none';els.adapter.innerHTML='';return}els.adapter.style.display='block';els.adapter.innerHTML=`<div class="adapter-title">🧠 Адаптированные данные</div><div class="adapter-hint">Формат, который получает расчётное ядро: L × W × H + единица + количество.</div>`+rows.map((r,i)=>`<div class="adapter-row"><span><b>Позиция ${i+1}</b> — ${r.dims.join(' × ')} ${r.unit} × ${r.quantity} шт.</span>${r.warning?`<div class="adapter-warning">⚠️ ${r.warning}</div>`:''}</div>`).join('')}
 function adaptText(){
  const rows=adaptedRows();
